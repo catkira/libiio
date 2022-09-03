@@ -162,7 +162,8 @@ bool cfg_ad9361_streaming_ch(struct stream_cfg *cfg, enum iodev type, int chid)
 	// Configure phy and lo channels
 	printf("* Acquiring AD9361 phy channel %d\n", chid);
 	if (!get_phy_chan(type, chid, &chn)) {	return false; }
-	wr_ch_str(chn, "rf_port_select",     cfg->rfport);
+	if (iio_channel_attr_write_string(chn, "rf_port_select", cfg->rfport) < 0)
+		printf("Error %s writing to channel \"%s\"\nvalue may not be supported. This error can be ignored for PlutoSDR and derivatives.\n", cfg->rfport, "rf_port_select");
 	wr_ch_lli(chn, "rf_bandwidth",       cfg->bw_hz);
 	wr_ch_lli(chn, "sampling_frequency", cfg->fs_hz);
 
