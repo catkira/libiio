@@ -1655,7 +1655,11 @@ out_unlock:
 
 int iiod_client_dequeue_block(struct iio_block_pdata *block, bool nonblock)
 {
+	struct iiod_client_buffer_pdata *pdata = block->buffer;
+	struct iiod_command cmd;
+	struct iiod_buf buf;
 	int ret = 0;
+	bool is_rx;
 
 	iio_mutex_lock(block->lock);
 
@@ -1680,8 +1684,39 @@ int iiod_client_dequeue_block(struct iio_block_pdata *block, bool nonblock)
 
 	/* Retrieve return code of enqueue */
 	ret = (int) iiod_io_wait_for_response(block->io);
+	if (ret < 0) {
+		if ((uint16_t)ret == 0) {
+			/* Low 16 bits are clear - the block wasn't enqueued. */
+			block->enqueued = false;
 
-	block->enqueued = false;
+			/* Get the actual error code from the upper 16 bits. */
+			ret >>= 16;
+			goto out_unlock;
+		}
+
+		/* Enqueueing succeeded, but dequeueing failed. Enqueue a
+		 * IIOD_OP_RETRY_DEQUEUE_BLOCK command. */
+
+		is_rx = !iio_device_is_tx(pdata->dev);
+
+		cmd.op = IIOD_OP_RETRY_DEQUEUE_BLOCK;
+		cmd.dev = (uint8_t) iio_device_get_index(pdata->dev);
+		cmd.code = pdata->idx | (block->idx << 16);
+		buf.ptr = block->data;
+		buf.size = block->bytes_used;
+
+		iiod_io_get_response_async(block->io, &buf, is_rx);
+
+		ret = iiod_io_send_command_async(block->io, &cmd, NULL, 0);
+		if (ret < 0) {
+			iiod_io_cancel_response(block->io);
+			goto out_unlock;
+		}
+
+		block->enqueued = true;
+	} else {
+		block->enqueued = false;
+	}
 
 out_unlock:
 	iio_mutex_unlock(block->lock);
