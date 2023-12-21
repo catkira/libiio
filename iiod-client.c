@@ -1658,7 +1658,7 @@ int iiod_client_dequeue_block(struct iio_block_pdata *block, bool nonblock)
 	struct iiod_client_buffer_pdata *pdata = block->buffer;
 	struct iiod_command cmd;
 	struct iiod_buf buf;
-	int ret = 0;
+	int err, ret = 0;
 	bool is_rx;
 
 	iio_mutex_lock(block->lock);
@@ -1707,8 +1707,9 @@ int iiod_client_dequeue_block(struct iio_block_pdata *block, bool nonblock)
 
 		iiod_io_get_response_async(block->io, &buf, is_rx);
 
-		ret = iiod_io_send_command_async(block->io, &cmd, NULL, 0);
-		if (ret < 0) {
+		err = iiod_io_send_command_async(block->io, &cmd, NULL, 0);
+		if (err < 0) {
+			ret = err;
 			iiod_io_cancel_response(block->io);
 			goto out_unlock;
 		}
