@@ -783,14 +783,14 @@ static void handle_retry_dequeue_block(struct parser_pdata *pdata,
 	buf = get_iio_buffer(pdata, cmd, &entry);
 	ret = iio_err(buf);
 	if (ret) {
-		IIO_PERROR(ret, "handle_transfer_block: Could not find IIO buffer");
+		printf("handle_transfer_block: Could not find IIO buffer");
 		return;
 	}
 
 	block = get_iio_block(pdata, entry, cmd, &block_entry);
 	ret = iio_err(block);
 	if (ret) {
-		IIO_PERROR(ret, "handle_transfer_block: Could not find IIO block");
+		printf("handle_transfer_block: Could not find IIO block");
 		return;
 	}
 
@@ -803,182 +803,6 @@ static void handle_retry_dequeue_block(struct parser_pdata *pdata,
 
 out_send_response:
 	iiod_io_send_response_code(block_entry->io, ret);
-}
-
-static int evstream_read(void *priv, void *d)
-{
-	struct evstream_entry *entry = priv;
-	struct iio_event event;
-	struct iiod_buf buf = {
-		.ptr = &event,
-		.size = sizeof(event),
-	};
-	int ret;
-
-	ret = iio_event_stream_read(entry->stream, &event, false);
-	if (ret < 0)
-	      return iiod_io_send_response_code(entry->io, ret);
-
-	return iiod_io_send_response(entry->io, sizeof(event), &buf, 1);
-}
-
-static void handle_create_evstream(struct parser_pdata *pdata,
-				   const struct iiod_command *cmd,
-				   struct iiod_command_data *cmd_data)
-{
-	const struct iio_context *ctx = pdata->ctx;
-	const struct iio_device *dev;
-	struct evstream_entry *entry;
-	struct iiod_io *io;
-	int ret = -EINVAL;
-
-	io = iiod_command_create_io(cmd, cmd_data);
-	ret = iio_err(io);
-	if (ret) {
-		/* TODO: How to handle this error? */
-		return;
-	}
-
-	dev = iio_context_get_device(ctx, cmd->dev);
-	if (!dev)
-		goto out_send_response;
-
-	entry = zalloc(sizeof(*entry));
-	if (!entry) {
-		ret = -ENOMEM;
-		goto out_send_response;
-	}
-
-	entry->io = io;
-	entry->dev = dev;
-	entry->client_id = cmd->client_id;
-	entry->pdata = pdata;
-
-	entry->stream = iio_device_create_event_stream(dev);
-	ret = iio_err(entry->stream);
-	if (ret) {
-		free(entry);
-		goto out_send_response;
-	}
-
-	entry->task = iio_task_create(evstream_read, entry,
-				      "evstream-read-thd");
-	ret = iio_err(entry->task);
-	if (ret) {
-		iio_event_stream_destroy(entry->stream);
-		free(entry);
-		goto out_send_response;
-	}
-
-	iio_task_start(entry->task);
-
-	/* Keep a reference to the iiod_io until the evstream is freed. */
-	iiod_io_ref(io);
-
-	pthread_mutex_lock(&evlist_lock);
-	SLIST_INSERT_HEAD(&evlist, entry, entry);
-	pthread_mutex_unlock(&evlist_lock);
-
-out_send_response:
-	iiod_io_send_response_code(io, ret);
-	iiod_io_unref(io);
-}
-
-static struct evstream_entry * get_evstream(struct parser_pdata *pdata,
-					    const struct iiod_command *cmd,
-					    uint16_t idx, bool remove)
-{
-	const struct iio_context *ctx = pdata->ctx;
-	const struct iio_device *dev;
-	struct evstream_entry *entry;
-
-	dev = iio_context_get_device(ctx, cmd->dev);
-	if (!dev)
-		return NULL;
-
-	pthread_mutex_lock(&evlist_lock);
-	SLIST_FOREACH(entry, &evlist, entry) {
-		if (entry->client_id == idx
-		    && entry->dev == dev
-		    && entry->pdata == pdata) {
-			break;
-		}
-	}
-
-	if (entry && remove)
-	      SLIST_REMOVE(&evlist, entry, evstream_entry, entry);
-
-	pthread_mutex_unlock(&evlist_lock);
-
-	return entry;
-}
-
-static void free_evstream(struct evstream_entry *entry)
-{
-
-	iio_event_stream_destroy(entry->stream);
-	iiod_io_cancel(entry->io);
-
-	iio_task_stop(entry->task);
-	iio_task_destroy(entry->task);
-
-	iiod_io_unref(entry->io);
-	free(entry);
-}
-
-static void handle_free_evstream(struct parser_pdata *pdata,
-				 const struct iiod_command *cmd,
-				 struct iiod_command_data *cmd_data)
-{
-	struct evstream_entry *entry, *each;
-	struct iiod_io *io = iiod_command_get_default_io(cmd_data);
-	int ret = 0;
-
-	entry = get_evstream(pdata, cmd, cmd->code, true);
-	if (!entry) {
-		ret = -EBADF;
-		goto out_send_response;
-	}
-
-	free_evstream(entry);
-
-out_send_response:
-	iiod_io_send_response_code(io, ret);
-}
-
-static void handle_read_event(struct parser_pdata *pdata,
-			      const struct iiod_command *cmd,
-			      struct iiod_command_data *cmd_data)
-{
-	struct evstream_entry *entry;
-	int ret;
-
-	entry = get_evstream(pdata, cmd, cmd->client_id, false);
-	if (!entry) {
-		/* TODO: How to handle this error? */
-		return;
-	}
-
-	if (cmd->code) {
-		struct iio_event event;
-		struct iiod_buf buf = {
-			.ptr = &event,
-			.size = sizeof(event),
-		};
-
-		/* Nonblock mode: run iio_event_stream_read() inline,
-		 * and respond here. */
-		ret = iio_event_stream_read(entry->stream, &event, true);
-		if (ret < 0)
-		      iiod_io_send_response_code(entry->io, ret);
-		else
-		      iiod_io_send_response(entry->io, sizeof(event), &buf, 1);
-	} else {
-		/* Blocking mode: defer the answer. */
-		ret = iio_task_enqueue_autoclear(entry->task, entry);
-		if (ret)
-			iiod_io_send_response_code(entry->io, ret);
-	}
 }
 
 typedef void (*iiod_opcode_fn)(struct parser_pdata *,
@@ -1008,11 +832,7 @@ static const iiod_opcode_fn iiod_op_functions[] = {
 	[IIOD_OP_FREE_BLOCK]		= handle_free_block,
 	[IIOD_OP_TRANSFER_BLOCK]	= handle_transfer_block,
 	[IIOD_OP_ENQUEUE_BLOCK_CYCLIC]	= handle_transfer_block,
-	[IIOD_OP_RETRY_DEQUEUE_BLOCK]	= handle_retry_dequeue_block,
-
-	[IIOD_OP_CREATE_EVSTREAM]	= handle_create_evstream,
-	[IIOD_OP_FREE_EVSTREAM]		= handle_free_evstream,
-	[IIOD_OP_READ_EVENT]		= handle_read_event,
+	[IIOD_OP_RETRY_DEQUEUE_BLOCK]	= handle_retry_dequeue_block
 };
 
 static int iiod_cmd(const struct iiod_command *cmd,
