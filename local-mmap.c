@@ -94,6 +94,7 @@ local_create_mmap_block(struct iio_buffer_pdata *pdata,
 	struct block_alloc_req req;
 	int ret;
 
+    printf("start\n");
 	if (!ppdata->mmap_check_done) {
 		pdata->mmap_supported = local_is_mmap_api_supported(pdata->fd);
 		ppdata->mmap_check_done = true;
@@ -102,6 +103,7 @@ local_create_mmap_block(struct iio_buffer_pdata *pdata,
 	if (!pdata->mmap_supported)
 		return iio_ptr(-ENOSYS);
 
+    printf("zalloc\n");
 	priv = zalloc(sizeof(*priv));
 	if (!priv)
 		return iio_ptr(-ENOMEM);
@@ -113,6 +115,7 @@ local_create_mmap_block(struct iio_buffer_pdata *pdata,
 		goto out_free_priv;
 	}
 
+    printf("__builtin_popcountl\n");
 	if (__builtin_popcountl(ppdata->mmap_block_mask) == ppdata->nb_blocks) {
 		/* All our allocated blocks are used; we need to create one more. */
 		priv->idx = ppdata->nb_blocks;
@@ -136,10 +139,12 @@ local_create_mmap_block(struct iio_buffer_pdata *pdata,
 
 	priv->block.id = priv->idx;
 
-	ret = ioctl_nointr(pdata->fd, BLOCK_QUERY_IOCTL, &priv->block);
+    printf("ioctl_nointr\n");
+    ret = ioctl_nointr(pdata->fd, BLOCK_QUERY_IOCTL, &priv->block);
 	if (ret < 0)
 		goto out_free_priv;
 
+    printf("mmap\n");
 	priv->pdata.data = mmap(0, size, PROT_READ | PROT_WRITE, MAP_SHARED,
 				pdata->fd, priv->block.offset);
 	if (priv->pdata.data == MAP_FAILED) {

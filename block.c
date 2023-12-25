@@ -34,15 +34,18 @@ iio_buffer_create_block(struct iio_buffer *buf, size_t size)
 	struct iio_block *block;
 	int ret;
 
+    printf("iio_device_get_sample_size\n");
 	sample_size = iio_device_get_sample_size(dev, buf->mask);
 	if (sample_size == 0 || size < sample_size)
 		return iio_ptr(-EINVAL);
 
+    printf("zalloc block\n");
 	block = zalloc(sizeof(*block));
 	if (!block)
 		return iio_ptr(-ENOMEM);
 
 	if (ops->create_block) {
+        printf("ops->create_block\n");
 		pdata = ops->create_block(buf->pdata, size, &block->data);
 		ret = iio_err(pdata);
 		if (!ret)

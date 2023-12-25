@@ -1480,7 +1480,9 @@ local_create_block(struct iio_buffer_pdata *pdata, size_t size, void **data)
 	struct iio_block_pdata *block;
 	int ret;
 
+    printf("local_create_block\n");
 	if (WITH_LOCAL_DMABUF_API) {
+        printf("local_create_dmabuf\n");
 		block = local_create_dmabuf(pdata, size, data);
 		ret = iio_err(block);
 
@@ -1489,6 +1491,7 @@ local_create_block(struct iio_buffer_pdata *pdata, size_t size, void **data)
 	}
 
 	if (WITH_LOCAL_MMAP_API) {
+        printf("local_create_mmap_block\n");
 		block = local_create_mmap_block(pdata, size, data);
 		ret = iio_err(block);
 

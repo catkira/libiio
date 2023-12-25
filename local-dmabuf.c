@@ -52,6 +52,7 @@ local_create_dmabuf(struct iio_buffer_pdata *pdata, size_t size, void **data)
 	struct iio_dmabuf_req req;
 	int ret, fd;
 
+    printf("zalloc\n");
 	priv = zalloc(sizeof(*priv));
 	if (!priv)
 		return iio_ptr(-ENOMEM);
@@ -59,6 +60,7 @@ local_create_dmabuf(struct iio_buffer_pdata *pdata, size_t size, void **data)
 	req.size = size;
 	req.resv = 0;
 
+    printf("ioctl_nointr\n");
 	ret = ioctl_nointr(pdata->fd, IIO_DMABUF_ALLOC_IOCTL, &req);
 
 	/* If we get -ENODEV or -EINVAL errors here, the ioctl is wrong and the
@@ -70,6 +72,7 @@ local_create_dmabuf(struct iio_buffer_pdata *pdata, size_t size, void **data)
 
 	fd = ret;
 
+    printf("mmap\n");
 	*data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if (*data == MAP_FAILED) {
 		ret = -errno;
