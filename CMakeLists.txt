@@ -170,7 +170,7 @@ option(WITH_EXAMPLES "Build examples" OFF)
 option(WITH_UTILS "Build the Libiio utility programs" ON)
 
 if (NOT LOG_LEVEL)
-	set(LOG_LEVEL Info CACHE STRING "Default log level" FORCE)
+	set(LOG_LEVEL Debug CACHE STRING "Default log level" FORCE)
 	set_property(CACHE LOG_LEVEL PROPERTY STRINGS NoLog Error Warning Info Debug)
 endif()
 
