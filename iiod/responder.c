@@ -698,7 +698,7 @@ static void handle_free_block(struct parser_pdata *pdata,
 			      const struct iiod_command *cmd,
 			      struct iiod_command_data *cmd_data)
 {
-	printf("enter handle_free_block\n");
+	// printf("enter handle_free_block\n");
 	struct buffer_entry *buf_entry;
 	struct block_entry *entry;
 	struct iio_buffer *buf;
@@ -744,7 +744,7 @@ out_send_response:
 		return;
 	}
 	iiod_io_send_response_code(io, ret);
-	iiod_io_unref(io);
+	// iiod_io_unref(io);
 	printf("leave handle_free_buffer\n");
 }
 
@@ -1100,9 +1100,9 @@ static int iiod_cmd(const struct iiod_command *cmd,
 		return -EINVAL;
 	}
 
-	printf("call op-code %d\n", cmd->op);
+	// printf("call op-code %d\n", cmd->op);
 	iiod_op_functions[cmd->op](pdata, cmd, data);
-	printf("done\n");
+	// printf("done\n");
 
 	return 0;
 }
