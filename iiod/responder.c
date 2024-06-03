@@ -39,7 +39,9 @@ static void free_block_entry(struct block_entry *entry)
 {
 	iiod_io_cancel(entry->io);
 	iiod_io_unref(entry->io);
+	printf("iio_block_destroy ...");
 	iio_block_destroy(entry->block);
+	printf(" ok\n");
 	free(entry);
 }
 
@@ -530,7 +532,7 @@ static void handle_free_buffer(struct parser_pdata *pdata,
 			       const struct iiod_command *cmd,
 			       struct iiod_command_data *cmd_data)
 {
-	IIO_DEBUG("enter handle_free_buffer\n");
+	printf("enter handle_free_buffer\n");
 	struct iiod_io *io = iiod_command_get_default_io(cmd_data);
 	const struct iio_device *dev;
 	struct block_entry *block_entry, *block_next;
@@ -691,6 +693,7 @@ static void handle_free_block(struct parser_pdata *pdata,
 			      const struct iiod_command *cmd,
 			      struct iiod_command_data *cmd_data)
 {
+	printf("enter handle_free_block\n");
 	struct buffer_entry *buf_entry;
 	struct block_entry *entry;
 	struct iio_buffer *buf;
