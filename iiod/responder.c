@@ -731,6 +731,7 @@ static void handle_free_block(struct parser_pdata *pdata,
 	IIO_DEBUG("Block %u freed.\n", cmd->code);
 
 out_send_response:
+	printf("out_send_response\n");
 	/* We may have freed the block's iiod_io, so create a new one to
 	 * answer the request. */
 	io = iiod_command_create_io(cmd, cmd_data);
@@ -1094,6 +1095,7 @@ static int iiod_cmd(const struct iiod_command *cmd,
 		return -EINVAL;
 	}
 
+	printf("call op-code %d\n", cmd->op);
 	iiod_op_functions[cmd->op](pdata, cmd, data);
 
 	return 0;
