@@ -701,6 +701,7 @@ err_free_priv:
 
 void iiod_responder_stop(struct iiod_responder *priv)
 {
+	printf("iiod_responder_stop\n");
 	priv->thrd_stop = true;
 }
 
