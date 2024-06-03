@@ -737,10 +737,12 @@ out_send_response:
 	io = iiod_command_create_io(cmd, cmd_data);
 	if (iio_err(io)) {
 		/* TODO: How to handle the error? */
+		printf("Error in iiod_command_create_io");
 		return;
 	}
 	iiod_io_send_response_code(io, ret);
 	iiod_io_unref(io);
+	printf("leave handle_free_buffer\n");
 }
 
 static void handle_transfer_block(struct parser_pdata *pdata,
