@@ -302,6 +302,7 @@ err_free_client:
 
 void iiod_client_destroy(struct iiod_client *client)
 {
+	printf("iiod_client_destroy");
 	if (client->responder) {
 		iiod_client_cancel(client);
 		iiod_responder_destroy(client->responder);

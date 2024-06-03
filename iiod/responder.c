@@ -56,8 +56,16 @@ static void free_buffer_entry(struct buffer_entry *entry)
 		iio_task_stop(entry->enqueue_task);
 	}
 
+	if (entry->enqueue_task == NULL) {
+		printf("Error: enqueue_task is already destroyed!\n");
+	}
 	iio_task_destroy(entry->enqueue_task);
+	entry->enqueue_task = NULL;
+	if (entry->dequeue_task == NULL) {
+		printf("Error: dequeue_task is already destroyed!\n");
+	}
 	iio_task_destroy(entry->dequeue_task);
+	entry->dequeue_task = NULL;
 
 	iio_mutex_lock(entry->lock);
 
