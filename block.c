@@ -164,9 +164,14 @@ int iio_block_dequeue(struct iio_block *block, bool nonblock)
 	const struct iio_backend_ops *ops = buffer->dev->ctx->ops;
 	struct iio_task_token *token;
 
-	if (ops->dequeue_block && block->pdata)
-		return ops->dequeue_block(block->pdata, nonblock);
+	if (ops->dequeue_block && block->pdata) {
+		printf("dequeue_block\n");
+		int val = ops->dequeue_block(block->pdata, nonblock);
+		printf("deq done\n");
+		return val;
+	}
 
+	printf("lock\n");
 	iio_mutex_lock(buffer->lock);
 	token = block->token;
 

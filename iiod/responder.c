@@ -317,20 +317,17 @@ out_send_response:
 
 static int buffer_dequeue_block(void *priv, void *d)
 {
-	printf("buffer_dequeue_block\n");
 	struct buffer_entry *buffer = priv;
 	struct block_entry *entry = d;
 	struct iiod_buf data;
 	unsigned int nb_data = 0;
 	intptr_t ret;
 
-	printf("1\n");
 	ret = iio_block_dequeue(entry->block, false);
 	if (ret < 0)
 		goto out_send_response;
 
 	if (!iio_buffer_is_tx(buffer->buf)) {
-		printf("tx\n");
 		data.ptr = iio_block_start(entry->block);
 		data.size = iio_block_end(entry->block) - data.ptr;
 		nb_data++;
@@ -339,9 +336,7 @@ static int buffer_dequeue_block(void *priv, void *d)
 	}
 
 out_send_response:
-	printf("1\n");
 	iiod_io_send_response(entry->io, ret, &data, nb_data);
-	printf("buffer_dequeue_block done\n");
 	return 0;
 }
 
