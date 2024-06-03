@@ -328,6 +328,7 @@ static int iiod_responder_reader_worker(struct iiod_responder *priv)
 		iiod_responder_signal_io(io, cmd.code);
 		iiod_io_unref_unlocked(io);
 	}
+	printf("iiod_responder_reader_worker stop");
 
 	priv->thrd_err_code = priv->thrd_stop ? -EINTR : (int) ret;
 	priv->thrd_stop = true;
