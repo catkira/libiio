@@ -317,6 +317,7 @@ out_send_response:
 
 static int buffer_dequeue_block(void *priv, void *d)
 {
+	printf("buffer_dequeue_block\n");
 	struct buffer_entry *buffer = priv;
 	struct block_entry *entry = d;
 	struct iiod_buf data;
@@ -337,6 +338,7 @@ static int buffer_dequeue_block(void *priv, void *d)
 
 out_send_response:
 	iiod_io_send_response(entry->io, ret, &data, nb_data);
+	printf("buffer_dequeue_block done\n");
 	return 0;
 }
 
