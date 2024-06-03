@@ -52,8 +52,12 @@ static void free_buffer_entry(struct buffer_entry *entry)
 	iio_buffer_cancel(entry->buf);
 
 	if (!NO_THREADS) {
+		printf("stopping dequeue task ...\n");
 		iio_task_stop(entry->dequeue_task);
+		printf("dequeue task stopped\n");
+		printf("stopping enqueue task ...\n");
 		iio_task_stop(entry->enqueue_task);
+		printf("enqueue task stopped\n");
 	}
 
 	if (entry->enqueue_task == NULL) {
@@ -748,7 +752,7 @@ out_send_response:
 	}
 	iiod_io_send_response_code(io, ret);
 	// iiod_io_unref(io);
-	printf("leave handle_free_buffer\n");
+	printf("leave handle_free_block\n");
 }
 
 static void handle_transfer_block(struct parser_pdata *pdata,
