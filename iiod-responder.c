@@ -77,6 +77,7 @@ struct iiod_responder {
 	uint16_t next_client_id;
 
 	struct iio_mutex *lock;
+	struct iio_mutex *lock_2;
 	struct iio_thrd *read_thrd;
 	struct iio_task *write_task;
 
@@ -667,13 +668,18 @@ iiod_responder_create(const struct iiod_responder_ops *ops, void *d)
 	if (err)
 		goto err_free_priv;
 
+	priv->lock_2 = iio_mutex_create();
+	err = iio_err(priv->lock_2);
+	if (err)
+		goto err_free_lock;
+
 	priv->default_io_pool_size = 0;
 
 	priv->write_task = iio_task_create(iiod_responder_write, priv,
 					   "iiod-responder-writer-task");
 	err = iio_err(priv->write_task);
 	if (err)
-		goto err_free_lock;
+		goto err_free_lock_2;
 
 	if (!NO_THREADS) {
 		priv->read_thrd = iio_thrd_create(iiod_responder_reader_thrd, priv,
@@ -689,6 +695,8 @@ iiod_responder_create(const struct iiod_responder_ops *ops, void *d)
 
 err_free_write_task:
 	iio_task_destroy(priv->write_task);
+err_free_lock_2:
+	iio_mutex_destroy(priv->lock_2);
 err_free_lock:
 	iio_mutex_destroy(priv->lock);
 err_free_priv:
@@ -798,6 +806,7 @@ void iiod_io_unref(struct iiod_io *io)
 struct iiod_io *
 iiod_responder_get_default_io(struct iiod_responder *priv)
 {
+	iio_mutex_lock(priv->lock_2);
 	int idx = -1;
 	const uint64_t thid = iio_curr_thid();
     unsigned int i;
@@ -819,10 +828,12 @@ iiod_responder_get_default_io(struct iiod_responder *priv)
 		priv->default_io_pool_size++;
 		if (priv->default_io_pool_size > MAX_DEFAULT_IO_ELEMENTS) {
 			printf("default_io_pool overflow!!!\n");
+			iio_mutex_unlock(priv->lock_2);
 			return iio_ptr(-ENOMEM);
 		}
 
 	}
+	iio_mutex_unlock(priv->lock_2);
 	return io;
 }
 
