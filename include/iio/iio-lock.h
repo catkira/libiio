@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: LGPL-2.1-or-later */
+/* SPDX-License-Identifier: MIT */
 /*
  * libiio - Library for interfacing industrial I/O (IIO) devices
  *
@@ -44,14 +44,16 @@ __api int iio_task_destroy(struct iio_task *task);
 __api void iio_task_start(struct iio_task *task);
 __api void iio_task_stop(struct iio_task *task);
 
+__api void iio_task_token_destroy(struct iio_task_token *token);
+__api struct iio_task_token * iio_task_token_create(struct iio_task *task, void *elm);
 __api struct iio_task_token * iio_task_enqueue(struct iio_task *task, void *elm);
 __api int iio_task_enqueue_autoclear(struct iio_task *task, void *elm);
+__api int iio_task_token_enqueue(struct iio_task_token *token);
 
 __api _Bool iio_task_is_done(struct iio_task_token *token);
 __api int iio_task_sync(struct iio_task_token *token, unsigned int timeout_ms);
+__api int iio_task_cancel_sync(struct iio_task_token *token, unsigned int timeout_ms);
 __api void iio_task_cancel(struct iio_task_token *token);
-
-__api uint64_t iio_curr_thid(void);
 
 #undef __api
 

@@ -21,7 +21,6 @@
 #endif
 
 #define NB_BUFS_MAX 2
-#define MAX_DEFAULT_IO_ELEMENTS 100
 
 static void iiod_io_ref_unlocked(struct iiod_io *io);
 static void iiod_io_unref_unlocked(struct iiod_io *io);
@@ -70,10 +69,7 @@ struct iiod_responder {
 	const struct iiod_responder_ops *ops;
 	void *d;
 
-	struct iiod_io *readers, *writers;
-	struct iiod_io* default_io_pool[MAX_DEFAULT_IO_ELEMENTS];
-	uint64_t default_io_pool_thread_ids[MAX_DEFAULT_IO_ELEMENTS];
-	unsigned int default_io_pool_size;
+	struct iiod_io *readers, *writers, *default_io;
 	uint16_t next_client_id;
 
 	struct iio_mutex *lock;
@@ -386,10 +382,12 @@ static int iiod_enqueue_command(struct iiod_io *writer, uint8_t op,
 		memcpy(writer->w_io.buf, buf, sizeof(*buf) * nb);
 	writer->w_io.nb_buf = nb;
 
-	if (writer->write_token)
-	      return -EIO;
-
 	iio_mutex_lock(priv->lock);
+	if (writer->write_token) {
+		iio_mutex_unlock(priv->lock);
+		return -EIO;
+	}
+
 	if (priv->thrd_stop) {
 		iio_mutex_unlock(priv->lock);
 		return priv->thrd_err_code;
@@ -403,10 +401,11 @@ static int iiod_enqueue_command(struct iiod_io *writer, uint8_t op,
 
 bool iiod_io_command_is_done(struct iiod_io *io)
 {
+	struct iiod_responder *priv = io->responder;
 	uint64_t timeout_us;
 	bool done;
 
-	iio_mutex_lock(io->lock);
+	iio_mutex_lock(priv->lock);
 
 	done = io->write_token && iio_task_is_done(io->write_token);
 
@@ -416,7 +415,7 @@ bool iiod_io_command_is_done(struct iiod_io *io)
 		done = read_counter_us() - io->w_io.start_time > timeout_us;
 	}
 
-	iio_mutex_unlock(io->lock);
+	iio_mutex_unlock(priv->lock);
 
 	return done;
 }
@@ -424,12 +423,13 @@ bool iiod_io_command_is_done(struct iiod_io *io)
 int iiod_io_wait_for_command_done(struct iiod_io *io)
 {
 	uint64_t diff_ms = 0, timeout_ms = io->timeout_ms;
+	struct iiod_responder *priv = io->responder;
 	struct iio_task_token *token;
 
-	iio_mutex_lock(io->lock);
+	iio_mutex_lock(priv->lock);
 	token = io->write_token;
 	io->write_token = NULL;
-	iio_mutex_unlock(io->lock);
+	iio_mutex_unlock(priv->lock);
 
 	if (!token)
 		return 0;
@@ -642,6 +642,7 @@ void
 iiod_responder_set_timeout(struct iiod_responder *priv, unsigned int timeout_ms)
 {
 	priv->timeout_ms = timeout_ms;
+	priv->default_io->timeout_ms = timeout_ms;
 }
 
 void
@@ -668,13 +669,16 @@ iiod_responder_create(const struct iiod_responder_ops *ops, void *d)
 	if (err)
 		goto err_free_priv;
 
-	priv->default_io_pool_size = 0;
+	priv->default_io = iiod_responder_create_io(priv, 0);
+	err = iio_err(priv->default_io);
+	if (err)
+	      goto err_free_lock;
 
 	priv->write_task = iio_task_create(iiod_responder_write, priv,
 					   "iiod-responder-writer-task");
 	err = iio_err(priv->write_task);
 	if (err)
-		goto err_free_lock;
+		goto err_free_io;
 
 	if (!NO_THREADS) {
 		priv->read_thrd = iio_thrd_create(iiod_responder_reader_thrd, priv,
@@ -690,6 +694,8 @@ iiod_responder_create(const struct iiod_responder_ops *ops, void *d)
 
 err_free_write_task:
 	iio_task_destroy(priv->write_task);
+err_free_io:
+	iiod_io_unref(priv->default_io);
 err_free_lock:
 	iio_mutex_destroy(priv->lock);
 err_free_priv:
@@ -709,11 +715,7 @@ void iiod_responder_destroy(struct iiod_responder *priv)
 
 	iio_task_destroy(priv->write_task);
 
-	unsigned int i;
-    for (i = 0; i < priv->default_io_pool_size; i++) {
-		iiod_io_unref(priv->default_io_pool[i]);
-	}
-
+	iiod_io_unref(priv->default_io);
 	iio_mutex_destroy(priv->lock);
 	free(priv);
 }
@@ -799,32 +801,7 @@ void iiod_io_unref(struct iiod_io *io)
 struct iiod_io *
 iiod_responder_get_default_io(struct iiod_responder *priv)
 {
-	int idx = -1;
-	const uint64_t thid = iio_curr_thid();
-    unsigned int i;
-	for (i = 0; i < priv->default_io_pool_size; i++) {
-		if (priv->default_io_pool_thread_ids[i] == thid) {
-			idx = i;
-			break;
-		}
-	}
-	struct iiod_io *io;
-	if (idx != -1 && priv->default_io_pool[idx] != NULL && priv->default_io_pool[idx]->refcnt != 0) {
-		io = priv->default_io_pool[idx];
-	}
-	else {
-		io = iiod_responder_create_io(priv, 0);
-		io->timeout_ms = priv->timeout_ms;
-		priv->default_io_pool_thread_ids[priv->default_io_pool_size] = thid;
-		priv->default_io_pool[priv->default_io_pool_size] = io;
-		priv->default_io_pool_size++;
-		if (priv->default_io_pool_size > MAX_DEFAULT_IO_ELEMENTS) {
-			printf("default_io_pool overflow!!!\n");
-			return iio_ptr(-ENOMEM);
-		}
-
-	}
-	return io;
+	return priv->default_io;
 }
 
 struct iiod_io *

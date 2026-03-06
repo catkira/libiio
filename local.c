@@ -329,7 +329,7 @@ static int local_enable_buffer(struct iio_buffer_pdata *pdata,
 	if ((pdata->dmabuf_supported | pdata->mmap_supported) != !nb_samples)
 		return -EINVAL;
 
-	if (nb_samples) {
+	if (enable && nb_samples) {
 		ret = local_set_buffer_size(pdata, nb_samples);
 		if (ret)
 			return ret;
@@ -339,7 +339,7 @@ static int local_enable_buffer(struct iio_buffer_pdata *pdata,
 			return ret;
 	}
 
-	return local_do_enable_buffer(pdata, true);
+	return local_do_enable_buffer(pdata, enable);
 }
 
 static ssize_t local_readbuf(struct iio_buffer_pdata *buffer,
@@ -1411,7 +1411,7 @@ local_open_fd(const struct iio_device *dev, bool events, unsigned int idx)
 	iio_mutex_lock(lock);
 
 	dev_fd = dev->pdata->fd;
-	open_dev_fd = !dev_fd;
+	open_dev_fd = dev_fd < 0;
 
 	if (open_dev_fd) {
 		dev_fd = open(buf, O_RDWR | O_CLOEXEC | O_NONBLOCK);
@@ -1449,7 +1449,7 @@ static void local_close_fd(const struct iio_device *dev, int fd)
 
 	iio_mutex_lock(lock);
 	if (dev->pdata->fd == fd)
-		dev->pdata->fd = 0;
+		dev->pdata->fd = -1;
 
 	close(fd);
 	iio_mutex_unlock(lock);
@@ -1766,6 +1766,7 @@ static int init_devices(struct iio_context *ctx)
 		dev->pdata = calloc(1, sizeof(*dev->pdata));
 		if (!dev->pdata)
 			return -ENOMEM;
+		dev->pdata->fd = -1;
 	}
 
 	return 0;
