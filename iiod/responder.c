@@ -20,8 +20,11 @@
 
 #define ARRAY_SIZE(x) (sizeof(x) ? sizeof(x) / sizeof((x)[0]) : 0)
 
-/* Forward declaration */
+/* Forward declarations */
 static struct iio_buffer * get_iio_buffer(struct parser_pdata *pdata,
+					  const struct iiod_command *cmd,
+					  struct buffer_entry **entry_ptr);
+static struct iio_buffer * get_iio_buffer_unblocked(struct parser_pdata *pdata,
 					  const struct iiod_command *cmd,
 					  struct buffer_entry **entry_ptr);
 
@@ -520,6 +523,32 @@ static struct iio_buffer * get_iio_buffer(struct parser_pdata *pdata,
 	}
 
 	iio_mutex_unlock(buflist_lock);
+
+	if (buf && entry_ptr)
+		*entry_ptr = entry;
+
+	return buf ?: iio_ptr(-EBADF);
+}
+
+/* Like get_iio_buffer, but caller must already hold buflist_lock */
+static struct iio_buffer * get_iio_buffer_unblocked(struct parser_pdata *pdata,
+					  const struct iiod_command *cmd,
+					  struct buffer_entry **entry_ptr)
+{
+	const struct iio_device *dev;
+	struct buffer_entry *entry;
+	struct iio_buffer *buf = NULL;
+
+	dev = iio_context_get_device(pdata->ctx, cmd->dev);
+	if (!dev)
+		return iio_ptr(-EINVAL);
+
+	SLIST_FOREACH(entry, &bufferlist, entry) {
+		if (entry->dev == dev && entry->idx == (cmd->code & 0xffff)) {
+			buf = entry->buf;
+			break;
+		}
+	}
 
 	if (buf && entry_ptr)
 		*entry_ptr = entry;
